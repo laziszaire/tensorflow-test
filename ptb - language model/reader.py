@@ -35,16 +35,18 @@ def ptb_raw_data(data_path=None):
     valid_path = os.path.join(data_path, "ptb.valid.txt")
     test_path = os.path.join(data_path, "ptb.test.txt")
 
-    with open(train_path, 'r') as f:
-        train_doc = f.read().replace("\n", "<eos>").split()
-        word2id = _build_vocab(train_doc)
-        vocabulary = len(word2id)
-    train_data = doc2ids(train_path, word2id)
-    valid_data = doc2ids(valid_path, word2id)
-    test_data = doc2ids(test_path, word2id)
+    train_doc, valid_doc, test_doc = map(path2doc, [train_path, valid_path, test_path])
+    word2id = _build_vocab(train_doc)
+    vocabulary = len(word2id)
+    train_data, valid_data, test_data = map(lambda x: doc2ids(x, word2id), [train_doc, valid_doc, test_doc])
 
     return train_data, valid_data, test_data, vocabulary
 
+
+def path2doc(path):
+    with open(path, 'r') as f:
+        doc = f.read().replace("\n", "<eos>").split()
+    return doc
 
 def ptb_producer(raw_data, batch_size, num_steps, name=None):
     """
@@ -66,22 +68,12 @@ def ptb_producer(raw_data, batch_size, num_steps, name=None):
             return raw_data[i:i+num_steps], raw_data[i+1: i+num_steps+1]
 
         dataset = examples.map(_xy)
-        return dataset.padded_batch(batch_size, padded_shapes=([num_steps], [num_steps]))
+        return dataset.batch(batch_size, drop_remainder=True)
 
 
 def test_ptb_raw_data():
-    _join = lambda x, _: _.join(x)
-    docs = [" hello there i am",
-            " rain as day",
-            " want some cheesy puffs ?"]
-    doc_join = _join(docs, '\n')
-    tmpdir = tempfile.gettempdir()
-    for suffix in "train", "valid", "test":
-        filename = os.path.join(tmpdir, "ptb.%s.txt" % suffix)
-        with open(filename, 'w') as fh:
-            fh.write(doc_join)
-
-    output = ptb_raw_data(tmpdir)
+    data_path = './data/simple-examples/data'
+    output = ptb_raw_data(data_path)
     assert len(output) == 4
     print('raw data smoke test pass')
 
