@@ -17,6 +17,7 @@ class PTBinput:
         self.batch_size = batch_size
         self.num_steps = num_steps
 
+
 class LanguageModel:
     def __init__(self, is_training, config, input_):
         self._is_trainning = is_training
@@ -27,6 +28,7 @@ class LanguageModel:
         self.config = config
         self.vocab_size = config.vocab_size
         self.hidden_size = config.hidden_size
+        self._final_state = None
         self._build()
 
     def add_embeddings(self):
@@ -65,12 +67,8 @@ class LanguageModel:
     def add_pred(self, inputs):
         with tf.variable_scope('RNN', reuse=tf.AUTO_REUSE):
             self._cell = self.multi_cell()
-            state = self._init_state
-            outputs = []
-            for time_step in range(self.num_steps):
-                cell_output, state = self._cell(inputs[:, time_step, :], state)
-                outputs.append(cell_output)
-        output = tf.reshape(tf.concat(outputs, 1), [-1, self.config.hidden_size])
+            outputs, state = tf.nn.dynamic_rnn(self._cell, inputs, initial_state=self._init_state)
+        output = tf.reshape(outputs, [-1, self.config.hidden_size])
         self._final_state = state
         return output, state
 
@@ -115,6 +113,10 @@ class LanguageModel:
         self.add_train_op(cost)
 
     @property
+    def cost(self):
+        return self._cost
+
+    @property
     def input(self):
         return self._input
 
@@ -123,33 +125,29 @@ class LanguageModel:
         return self._train_op
 
     @property
-    def cost(self):
-        return self._cost
-
-    @property
     def initial_state(self):
         return self._init_state
 
     def run_epoch(self, session):
         costs, iters = 0, 0
-        state = session.run(self.initial_state)
         fetches = {'cost': self.cost,
                    'final_state': self._final_state,
                    'train': self.train_op,
-                   'init_state': self.initial_state}
+                   'init_state': self.initial_state,
+                   'lr': self._lr}
         session.run(tf.global_variables_initializer())
+        self.assign_lr(session, 1)
         session.run(self.input.init)
         N_run = 0
         while True:
             try:
                 vals = session.run(fetches)
                 cost = vals['cost']
-                state = vals['final_state']
                 costs += cost
                 iters += self.input.num_steps
-                if N_run % 2 == 0:
+                if N_run % 10 == 1:
                     print(costs / iters)
-                    print(vals['init_state'])
+                    print(vals['lr'])
                 N_run += 1
             except tf.errors.OutOfRangeError:
                 print('break')
@@ -182,7 +180,6 @@ def test_():
     is_training = True
     lm = LanguageModel(is_training, config, input_)
     with tf.Session() as sess:
-        lm.assign_lr(sess, 1)
         perplexity = lm.run_epoch(sess)
         print(perplexity)
 
