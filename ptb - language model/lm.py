@@ -172,7 +172,10 @@ class SmallConfig(object):
 
 
 def test_():
-    """smoke test"""
+    """
+    see if cost go down
+    :return:
+    """
     data_path = './data/simple-examples/data/'
     batch_size, num_steps = SmallConfig.batch_size, SmallConfig.num_steps
     input_ = PTBinput(data_path, batch_size=batch_size, num_steps=num_steps)
